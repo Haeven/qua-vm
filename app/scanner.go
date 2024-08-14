@@ -1,6 +1,9 @@
 package vm
 
-import e "github.com/rami3l/golox/errors"
+import (
+	e "github.com/rami3l/golox/errors"
+	"golang.org/x/exp/slices"
+)
 
 type Scanner struct {
 	start, curr, line int
@@ -37,7 +40,7 @@ func (s *Scanner) ScanToken() Token {
 		return s.makeToken(TNum)
 
 	case isAlpha(c): // Identifier.
-		for c1 := c; isAlpha(c1) || isDigit(c1); c1 = s.peek() {
+		for p := s.peek(); isAlpha(p) || isDigit(p); p = s.peek() {
 			s.advance()
 		}
 		return s.makeToken(s.identType())
@@ -170,13 +173,101 @@ func (s *Scanner) Error(reason string) *e.CompilationError {
 	return &e.CompilationError{Line: s.line, Reason: reason}
 }
 
-type Token struct {
-	Type             TokenType
-	Start, Len, Line int
+func (s *Scanner) identType() TokenType {
+	checkKeyword := func(
+		start int, rest string, ty TokenType,
+	) TokenType {
+		absStart := s.start + start
+		if s.curr >= absStart && slices.Equal(s.src[absStart:s.curr], []rune(rest)) {
+			return ty
+		}
+		return TIdent
+	}
 
-	// Error message for TErr.
-	Error *string
+	switch s.src[s.start] {
+	case 'a':
+		return checkKeyword(1, "nd", TAnd)
+	case 'b':
+		return checkKeyword(1, "reak", TBreak)
+	case 'c':
+		if s.curr-s.start > 1 {
+			switch s.src[s.start+1] {
+			case 'l':
+				return checkKeyword(2, "ass", TClass)
+			case 'o':
+				return checkKeyword(2, "ntinue", TContinue)
+			}
+		}
+	case 'e':
+		return checkKeyword(1, "lse", TElse)
+	case 'f':
+		if s.curr-s.start > 1 {
+			switch s.src[s.start+1] {
+			case 'a':
+				return checkKeyword(2, "lse", TFalse)
+			case 'o':
+				return checkKeyword(2, "r", TFor)
+			case 'u':
+				return checkKeyword(2, "n", TFun)
+			}
+		}
+	case 'i':
+		return checkKeyword(1, "f", TIf)
+	case 'n':
+		return checkKeyword(1, "il", TNil)
+	case 'o':
+		return checkKeyword(1, "r", TOr)
+	case 'p':
+		return checkKeyword(1, "rint", TPrint)
+	case 'r':
+		return checkKeyword(1, "eturn", TReturn)
+	case 's':
+		return checkKeyword(1, "uper", TSuper)
+	case 't':
+		if s.curr-s.start > 1 {
+			switch s.src[s.start+1] {
+			case 'h':
+				return checkKeyword(2, "is", TThis)
+			case 'r':
+				return checkKeyword(2, "ue", TTrue)
+			}
+		}
+	case 'v':
+		return checkKeyword(1, "ar", TVar)
+	case 'w':
+		return checkKeyword(1, "hile", TWhile)
+	}
+	return TIdent
 }
+
+func (s *Scanner) makeToken(ty TokenType) Token {
+	return Token{
+		Type:  ty,
+		Line:  s.line,
+		Runes: s.src[s.start:s.curr],
+	}
+}
+
+func (s *Scanner) errorToken(reason string) (res Token) {
+	res = s.makeToken(TErr)
+	res.Runes = []rune(reason)
+	return
+}
+
+func (s *Scanner) isAtEnd() bool { return s.curr >= len(s.src) }
+
+func isAlpha(c rune) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' }
+func isDigit(c rune) bool { return c >= '0' && c <= '9' }
+
+type Token struct {
+	Type TokenType
+	Line int
+	// The corresponding lexeme of this token, or the error message if Type is TErr.
+	Runes []rune
+}
+
+func (t Token) String() string  { return string(t.Runes) }
+func (t Token) Eq(u Token) bool { return t.Type == u.Type && slices.Equal(t.Runes, u.Runes) }
 
 //go:generate stringer -type=TokenType
 type TokenType int
