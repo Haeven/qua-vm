@@ -1,4 +1,4 @@
-# Qua
+# Qua VM
 Welcome to the best language on the internet :D
 
 Execute the following command to run:
